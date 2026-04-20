@@ -1,0 +1,31 @@
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path("products", views.products, name="products"),
+    path("product_detail/<slug:slug>", views.product_detail, name="product_detail"),
+    path("add_item/", views.add_item, name="add_item"),
+    path("checkout/", views.create_order, name="checkout"),
+    path("payments/stripe/create-session/", views.create_stripe_checkout_session, name="create_stripe_checkout_session"),
+    path("payments/stripe/session-status/", views.stripe_session_status, name="stripe_session_status"),
+    path("payments/stripe/webhook/", views.stripe_webhook, name="stripe_webhook"),
+    path("product_in_cart", views.product_in_cart, name="product_in_cart"),
+    path("get_cart_stat", views.get_cart_stat, name="get_cart_stat"),
+    path("get_cart", views.get_cart, name="get_cart"),
+    path("update_quantity/", views.update_quantity, name="update_quantity"),
+    path("delete_cartitem/", views.delete_cartitem, name="delete_cartitem"),
+    path("get_username", views.get_username, name="get_username"),
+    path("user_info", views.user_info, name="user_info"),
+    path("addresses/", views.shipping_addresses, name="shipping_addresses"),
+    path("addresses/<int:address_id>/set_default/", views.set_default_shipping_address, name="set_default_shipping_address"),
+    path("change_password/", views.change_password, name="change_password"),
+    path("orders/", views.user_orders, name="orders"),
+    path("orders/<int:order_id>/", views.order_detail, name="order_detail"),
+    path("orders/<int:order_id>/cancel/", views.cancel_order, name="cancel_order"),
+    path("orders/<int:order_id>/invoice/", views.download_invoice, name="download_invoice"),
+    path("register/", views.register, name="register"),
+    path("verify-email-otp/", views.verify_email_otp, name="verify_email_otp"),
+    path("resend-email-otp/", views.resend_email_otp, name="resend_email_otp"),
+    path("auth/login/request-otp/", views.login_request_otp, name="login_request_otp"),
+    path("auth/login/verify-otp/", views.login_verify_otp, name="login_verify_otp"),
+]

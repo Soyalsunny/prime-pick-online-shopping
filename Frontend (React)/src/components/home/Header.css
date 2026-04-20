@@ -1,0 +1,33 @@
+.header {
+  background: linear-gradient(135deg, #6050dc, #ff5733);
+  color: white;
+  position: relative;
+  padding-top: 2.5rem;
+  padding-bottom: 1.5rem;
+}
+
+.header-container {
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+.header-title {
+  text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+  font-size: calc(2rem + 1.3vw);
+}
+
+.header-paragraph {
+  font-size: calc(1.5rem + 0.5vw);
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.header-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 1;
+}

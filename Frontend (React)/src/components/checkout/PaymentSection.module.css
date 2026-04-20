@@ -1,0 +1,124 @@
+/* Button styles */
+.paypalButton, .flutterwaveButton {
+    font-size: 1.1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Add shadow to buttons */
+}
+
+.codButton {
+    font-size: 1.1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    background-color: #2e7d32;
+    color: #ffffff;
+    border: none;
+}
+
+/* Flutterwave button specific styles */
+.flutterwaveButton {
+    background-color: #f89500;
+    border: none;
+    color: white;
+}
+
+/* Hover effects for buttons */
+.paypalButton:hover, .flutterwaveButton:hover {
+    opacity: 0.9;
+    transform: scale(1.02); /* Add scaling */
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15); /* Enhance shadow on hover */
+}
+
+.codButton:hover {
+    opacity: 0.95;
+    transform: scale(1.02);
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15);
+}
+
+/* Card styling */
+.card {
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.addressModeRow {
+    display: flex;
+    gap: 8px;
+}
+
+.savedAddressWrap,
+.newAddressWrap {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px;
+    background: #fafafa;
+    margin-bottom: 8px;
+}
+
+.addressCard {
+    display: flex;
+    gap: 8px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 8px;
+    background: #fff;
+    cursor: pointer;
+}
+
+.addressCard input[type="radio"] {
+    margin-top: 4px;
+}
+
+.addressName {
+    margin-bottom: 4px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.defaultPill {
+    margin-left: 6px;
+    background: #e0e7ff;
+    color: #4338ca;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    text-transform: uppercase;
+}
+
+/* Add hover effect for card */
+.card:hover {
+    transform: scale(1.02); /* Add scaling */
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15); /* Enhance shadow on hover */
+}
+
+/* Order item styling (optional reuse from OrderItem.module.css) */
+.orderItem {
+    padding: 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Order item hover effect */
+.orderItem:hover {
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15);
+    transform: scale(1.02); /* Add scaling */
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+    .paypalButton, .flutterwaveButton, .codButton {
+        font-size: 1rem;
+        box-shadow: 0 3px 5px rgba(0, 0, 0, 0.1); /* Adjust shadow for smaller screens */
+    }
+    .card {
+        border-radius: 8px;
+    }
+}
