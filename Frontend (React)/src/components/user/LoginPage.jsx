@@ -143,7 +143,7 @@ const LoginPage = () => {
           )}
         </form>
         <div className={styles.extraLinks}>
-          <Link to="/profile" className={styles.link}>Reset Password</Link>
+          <Link to="/reset-password" className={styles.link}>Reset Password</Link>
           <p>
             Don't have an account? <Link to="/register" className={styles.link}>Sign Up</Link>
           </p>

@@ -45,6 +45,7 @@ from .serializers import (
     ChangePasswordSerializer,
     DetailedProductSerializer,
     OrderSerializer,
+    PasswordResetConfirmSerializer,
     ProductSerializer,
     ShippingAddressSerializer,
     SimpleCartSerializer,
@@ -135,6 +136,24 @@ def _send_login_otp_email(user, otp_code):
         f"Your Prime Pick login OTP is: {otp_code}\n"
         f"This OTP expires in {django_settings.EMAIL_OTP_EXPIRE_MINUTES} minutes.\n\n"
         "If this wasn't you, please reset your password immediately.\n"
+    )
+
+    send_mail(
+        subject,
+        message,
+        django_settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+        fail_silently=False,
+    )
+
+
+def _send_password_reset_otp_email(user, otp_code):
+    subject = "Prime Pick Password Reset OTP"
+    message = (
+        f"Hi {user.username},\n\n"
+        f"Your Prime Pick password reset OTP is: {otp_code}\n"
+        f"This OTP expires in {django_settings.EMAIL_OTP_EXPIRE_MINUTES} minutes.\n\n"
+        "If you did not request a password reset, please ignore this email.\n"
     )
 
     send_mail(
@@ -1312,4 +1331,168 @@ def login_verify_otp(request):
         },
         status=status.HTTP_200_OK,
     )
+
+
+@api_view(["POST"])
+@throttle_classes([OTPRequestThrottle])
+def password_reset_request_otp(request):
+    email = (request.data.get("email") or "").strip()
+    if not email:
+        return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = User.objects.filter(email__iexact=email, is_active=True).first()
+    if not user:
+        _audit_event("password_reset_request", request, status_text="failed", details="user_not_found")
+        return Response({"error": "User with this email was not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    _, otp_code = _set_user_email_otp(user)
+    try:
+        _send_password_reset_otp_email(user, otp_code)
+    except Exception:
+        _audit_event("password_reset_request", request, user=user, status_text="failed")
+        return _email_send_error_response("Failed to send password reset OTP. Please try again.")
+
+    challenge_token = signing.dumps({"user_id": user.id, "purpose": "password_reset_otp"}, salt="password-reset-otp")
+    _audit_event("password_reset_request", request, user=user)
+    return Response(
+        {
+            "message": "OTP sent to your email.",
+            "challenge": challenge_token,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["POST"])
+@throttle_classes([OTPVerifyThrottle])
+def password_reset_verify_otp(request):
+    challenge = request.data.get("challenge")
+    otp_code = (request.data.get("otp") or "").strip()
+
+    if not challenge or not otp_code:
+        return Response(
+            {"error": "Challenge and OTP are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        payload = signing.loads(
+            challenge,
+            salt="password-reset-otp",
+            max_age=django_settings.EMAIL_OTP_EXPIRE_MINUTES * 60,
+        )
+    except SignatureExpired:
+        return Response(
+            {"error": "Reset session expired. Please request a new OTP."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    except BadSignature:
+        return Response({"error": "Invalid reset session."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if payload.get("purpose") != "password_reset_otp":
+        return Response({"error": "Invalid reset session."}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = User.objects.filter(id=payload.get("user_id"), is_active=True).first()
+    if not user:
+        return Response({"error": "User not found or inactive."}, status=status.HTTP_404_NOT_FOUND)
+
+    otp_record = EmailOTP.objects.filter(user=user).first()
+    if not otp_record:
+        return Response({"error": "OTP not found. Please request a new OTP."}, status=status.HTTP_404_NOT_FOUND)
+
+    if otp_record.lockout_until and otp_record.lockout_until > timezone.now():
+        return Response(
+            {"error": "Too many invalid OTP attempts. Please request a new OTP later."},
+            status=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
+    if otp_record.expires_at < timezone.now():
+        return Response({"error": "OTP has expired. Please request a new OTP."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not check_password(otp_code, otp_record.otp_code):
+        otp_record.failed_attempts += 1
+        if otp_record.failed_attempts >= MAX_OTP_ATTEMPTS:
+            otp_record.lockout_until = timezone.now() + timedelta(minutes=django_settings.EMAIL_OTP_EXPIRE_MINUTES)
+        otp_record.save(update_fields=["failed_attempts", "lockout_until", "updated_at"])
+        _audit_event("password_reset_verify", request, user=user, status_text="failed")
+        return Response({"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
+
+    otp_record.is_verified = True
+    otp_record.failed_attempts = 0
+    otp_record.lockout_until = None
+    otp_record.save(update_fields=["is_verified", "failed_attempts", "lockout_until", "updated_at"])
+
+    reset_token = signing.dumps(
+        {
+            "user_id": user.id,
+            "purpose": "password_reset_confirm",
+            "pwd": user.password,
+        },
+        salt="password-reset-confirm",
+    )
+
+    _audit_event("password_reset_verify", request, user=user)
+    return Response(
+        {
+            "message": "OTP verified. You can now set a new password.",
+            "reset_token": reset_token,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["POST"])
+@throttle_classes([OTPVerifyThrottle])
+def password_reset_confirm(request):
+    reset_token = request.data.get("reset_token")
+    if not reset_token:
+        return Response({"error": "reset_token is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer = PasswordResetConfirmSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        payload = signing.loads(
+            reset_token,
+            salt="password-reset-confirm",
+            max_age=django_settings.EMAIL_OTP_EXPIRE_MINUTES * 60,
+        )
+    except SignatureExpired:
+        return Response(
+            {"error": "Reset token expired. Please verify OTP again."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    except BadSignature:
+        return Response({"error": "Invalid reset token."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if payload.get("purpose") != "password_reset_confirm":
+        return Response({"error": "Invalid reset token."}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = User.objects.filter(id=payload.get("user_id"), is_active=True).first()
+    if not user:
+        return Response({"error": "User not found or inactive."}, status=status.HTTP_404_NOT_FOUND)
+
+    if payload.get("pwd") != user.password:
+        return Response(
+            {"error": "Reset token is no longer valid. Please restart reset password flow."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    user.set_password(serializer.validated_data["new_password"])
+    user.save(update_fields=["password"])
+
+    EmailOTP.objects.filter(user=user).update(is_verified=False, failed_attempts=0, lockout_until=None)
+
+    try:
+        from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+
+        outstanding_tokens = OutstandingToken.objects.filter(user=user)
+        for token in outstanding_tokens:
+            BlacklistedToken.objects.get_or_create(token=token)
+    except Exception:
+        pass
+
+    _audit_event("password_reset_confirm", request, user=user)
+    return Response({"message": "Password reset successful. Please log in with your new password."})
 

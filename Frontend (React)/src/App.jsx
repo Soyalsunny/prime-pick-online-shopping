@@ -9,6 +9,7 @@ import CartPage from "./components/cart/CartPage"
 import CheckoutPage from "./components/checkout/CheckoutPage"
 import LoginPage from "./components/user/LoginPage"
 import RegisterPage from "./components/user/RegisterPage"
+import ResetPasswordPage from "./components/user/ResetPasswordPage"
 import ProtectedRoute from "./components/ui/ProtectedRoute"
 import { AuthProvider } from "./context/AuthContext"
 import UserProfilePage from "./components/user/UserProfilePage"
@@ -69,6 +70,7 @@ const App = () => {
             <Route path="checkout" element={<ProtectedRoute><CheckoutPage setNumCartItems={setNumCartItems} /></ProtectedRoute>} />
             <Route path="login" element={<LoginPage />} />
             <Route path="register" element={<RegisterPage />} />
+            <Route path="reset-password" element={<ResetPasswordPage />} />
             <Route path="profile" element={<ProtectedRoute><UserProfilePage /></ProtectedRoute>} />
             <Route path="orders/:orderId/track" element={<ProtectedRoute><OrderTrackingPage /></ProtectedRoute>} />
 

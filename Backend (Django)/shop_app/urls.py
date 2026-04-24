@@ -28,4 +28,7 @@ urlpatterns = [
     path("resend-email-otp/", views.resend_email_otp, name="resend_email_otp"),
     path("auth/login/request-otp/", views.login_request_otp, name="login_request_otp"),
     path("auth/login/verify-otp/", views.login_verify_otp, name="login_verify_otp"),
+    path("auth/password-reset/request-otp/", views.password_reset_request_otp, name="password_reset_request_otp"),
+    path("auth/password-reset/verify-otp/", views.password_reset_verify_otp, name="password_reset_verify_otp"),
+    path("auth/password-reset/confirm/", views.password_reset_confirm, name="password_reset_confirm"),
 ]
