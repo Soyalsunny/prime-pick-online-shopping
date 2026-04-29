@@ -13,6 +13,7 @@ from django.core import signing
 from django.core.signing import BadSignature, SignatureExpired
 from django.http import FileResponse
 from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.core.cache import cache
@@ -411,6 +412,11 @@ def _restock_order_items(order):
 @throttle_classes([PublicReadThrottle])
 def products(request):
     products = Product.objects.filter(category__in=Product.ALLOWED_CATEGORIES)
+    search_query = (request.query_params.get("q") or "").strip()
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) | Q(description__icontains=search_query)
+        )
     serializer = ProductSerializer(products, many=True)
     return Response(serializer.data)
 

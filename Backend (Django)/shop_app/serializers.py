@@ -255,6 +255,8 @@ class OrderSerializer(serializers.ModelSerializer):
 class AdminProductSerializer(serializers.ModelSerializer):
     is_in_stock = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
+    category = serializers.ChoiceField(choices=Product.CATEGORY, required=True)
+    stock = serializers.IntegerField(required=True, min_value=0)
 
     class Meta:
         model = Product
@@ -266,6 +268,13 @@ class AdminProductSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "image": {"required": False},
         }
+
+    def to_internal_value(self, data):
+        allowed_fields = set(self.fields.keys())
+        unknown_fields = sorted(set(getattr(data, "keys", lambda: [])()) - allowed_fields)
+        if unknown_fields:
+            raise serializers.ValidationError({field: ["Unexpected field."] for field in unknown_fields})
+        return super().to_internal_value(data)
 
     def get_is_in_stock(self, product):
         return product.stock > 0
