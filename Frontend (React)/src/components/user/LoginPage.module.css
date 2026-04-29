@@ -17,6 +17,11 @@
   max-width: 400px;
 }
 
+.lockedBox {
+  opacity: 0.72;
+  filter: grayscale(1);
+}
+
 .title {
     text-align: center;
     font-size: 2.2rem;
@@ -35,6 +40,18 @@
     color: #555;
     margin-bottom: 20px;
   }
+
+.lockoutBanner {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid #d6d3e8;
+  background: #f3f4f6;
+  color: #374151;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
   
 
 .form {
@@ -58,6 +75,13 @@
   border: 1px solid #ddd;
   border-radius: 5px;
   font-size: 1rem;
+}
+
+.input:disabled,
+.button:disabled,
+.secondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .input:focus {

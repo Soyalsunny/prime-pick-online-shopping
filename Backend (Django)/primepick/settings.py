@@ -187,7 +187,7 @@ EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
 EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Prime Pick <no-reply@primepick.local>")
 
-EMAIL_OTP_EXPIRE_MINUTES = config("EMAIL_OTP_EXPIRE_MINUTES", default=10, cast=int)
+EMAIL_OTP_EXPIRE_MINUTES = config("EMAIL_OTP_EXPIRE_MINUTES", default=1, cast=int)
 
 STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY", default="")
 STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET", default="")

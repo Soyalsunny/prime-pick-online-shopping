@@ -498,6 +498,9 @@ def product_in_cart(request):
     cart_code = request.query_params.get("cart_code")
     product_id = request.query_params.get("product_id")
 
+    if not cart_code or not product_id:
+        return Response({"error": "cart_code and product_id are required."}, status=status.HTTP_400_BAD_REQUEST)
+
     cart = Cart.objects.filter(cart_code=cart_code, paid=False).first()
     product = get_object_or_404(
         Product,
@@ -508,6 +511,9 @@ def product_in_cart(request):
     if not cart:
         return Response({'product_in_cart': False})
 
+    if request.user.is_authenticated and cart.user and cart.user != request.user:
+        return Response({"error": "This cart does not belong to the current user."}, status=status.HTTP_403_FORBIDDEN)
+
     product_exist_in_cart = CartItem.objects.filter(cart=cart, product=product).exists()
 
     return Response({'product_in_cart': product_exist_in_cart})
@@ -517,10 +523,16 @@ def product_in_cart(request):
 @throttle_classes([CartWriteThrottle])
 def get_cart_stat(request):
     cart_code = request.query_params.get("cart_code")
+    if not cart_code:
+        return Response({"error": "cart_code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
     cart = Cart.objects.filter(cart_code=cart_code, paid=False).first()
 
     if not cart:
         return Response({"id": None, "cart_code": cart_code, "num_of_items": 0})
+
+    if request.user.is_authenticated and cart.user and cart.user != request.user:
+        return Response({"error": "This cart does not belong to the current user."}, status=status.HTTP_403_FORBIDDEN)
 
     serializer = SimpleCartSerializer(cart)
     return Response(serializer.data)
@@ -530,6 +542,9 @@ def get_cart_stat(request):
 @throttle_classes([CartWriteThrottle])
 def get_cart(request):
     cart_code = request.query_params.get("cart_code")
+    if not cart_code:
+        return Response({"error": "cart_code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
     cart = Cart.objects.filter(cart_code=cart_code, paid=False).first()
 
     if not cart:
@@ -544,6 +559,9 @@ def get_cart(request):
                 "modified_at": None,
             }
         )
+
+    if request.user.is_authenticated and cart.user and cart.user != request.user:
+        return Response({"error": "This cart does not belong to the current user."}, status=status.HTTP_403_FORBIDDEN)
 
     serializer = CartSerializer(cart)
     return Response(serializer.data)
@@ -580,6 +598,9 @@ def update_quantity(request):
     if not cart:
         return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
 
+    if request.user.is_authenticated and cart.user and cart.user != request.user:
+        return Response({"error": "This cart does not belong to the current user."}, status=status.HTTP_403_FORBIDDEN)
+
     cartitem = CartItem.objects.filter(id=cartitem_id, cart=cart).select_related("product").first()
     if not cartitem:
         return Response({"error": "Cart item not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -600,7 +621,25 @@ def update_quantity(request):
 @throttle_classes([CartWriteThrottle])
 def delete_cartitem(request):
     cartitem_id = request.data.get("item_id")
-    cartitem = CartItem.objects.get(id=cartitem_id)
+
+    cart_code = request.data.get("cart_code")
+    if not cartitem_id or not cart_code:
+        return Response(
+            {"error": "item_id and cart_code are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    cart = Cart.objects.filter(cart_code=cart_code, paid=False).first()
+    if not cart:
+        return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.user.is_authenticated and cart.user and cart.user != request.user:
+        return Response({"error": "This cart does not belong to the current user."}, status=status.HTTP_403_FORBIDDEN)
+
+    cartitem = CartItem.objects.filter(id=cartitem_id, cart=cart).first()
+    if not cartitem:
+        return Response({"error": "Cart item not found."}, status=status.HTTP_404_NOT_FOUND)
+
     cartitem.delete()
     return Response({"message": "Item deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
 

@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styles from './LoginPage.module.css';
 import api from '../../api';
@@ -8,6 +8,8 @@ import { toast } from 'react-toastify';
 import { AuthContext } from '../../context/AuthContext';
 
 const LoginPage = () => {
+
+  const LOGIN_LOCKOUT_SECONDS = 60
 
     const { setIsAuthenticated, get_username }  = useContext(AuthContext)
 
@@ -21,8 +23,37 @@ const LoginPage = () => {
     const [step, setStep] = useState("credentials")
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
+    const [lockoutUntil, setLockoutUntil] = useState(() => {
+      const stored = Number(localStorage.getItem("loginOtpLockoutUntil") || 0)
+      return Number.isFinite(stored) ? stored : 0
+    })
+    const [now, setNow] = useState(Date.now())
 
     const userInfo = {username, password}
+    const lockoutRemainingSeconds = Math.max(0, Math.ceil((lockoutUntil - now) / 1000))
+    const isLoginPaused = lockoutRemainingSeconds > 0
+
+    useEffect(() => {
+      if (!lockoutUntil) {
+        localStorage.removeItem("loginOtpLockoutUntil")
+        return undefined
+      }
+
+      localStorage.setItem("loginOtpLockoutUntil", String(lockoutUntil))
+
+      const timer = window.setInterval(() => {
+        setNow(Date.now())
+      }, 1000)
+
+      return () => window.clearInterval(timer)
+    }, [lockoutUntil])
+
+    useEffect(() => {
+      if (!isLoginPaused && lockoutUntil) {
+        setLockoutUntil(0)
+        localStorage.removeItem("loginOtpLockoutUntil")
+      }
+    }, [isLoginPaused, lockoutUntil])
 
     async function completeLogin(access, refresh) {
       localStorage.setItem("access", access)
@@ -42,6 +73,9 @@ const LoginPage = () => {
     }
 
     function resetToCredentials() {
+      if (isLoginPaused) {
+        return
+      }
       setStep("credentials")
       setOtp("")
       setLoginChallenge("")
@@ -63,6 +97,10 @@ const LoginPage = () => {
           .catch(err => {
             const message = err?.response?.data?.error || "Username or password incorrect!"
             setError(message)
+            if (err?.response?.status === 429) {
+              setLockoutUntil(Date.now() + (LOGIN_LOCKOUT_SECONDS * 1000))
+              setNow(Date.now())
+            }
             setLoading(false)
             toast.error(message)
           })
@@ -83,20 +121,35 @@ const LoginPage = () => {
         .catch(err => {
           const message = err?.response?.data?.error || "Invalid OTP."
           setError(message)
+          if (err?.response?.status === 429) {
+            setLockoutUntil(Date.now() + (LOGIN_LOCKOUT_SECONDS * 1000))
+            setNow(Date.now())
+          }
           setLoading(false)
           toast.error(message)
         })
     }
 
+    const formatLockoutTime = (seconds) => {
+      const minutes = Math.floor(seconds / 60)
+      const remainingSeconds = seconds % 60
+      return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`
+    }
+
 
   return (
     <div className={styles.container}>
-      <div className={styles.loginBox}>
+      <div className={`${styles.loginBox} ${isLoginPaused ? styles.lockedBox : ""}`}>
          {error && <Error message={error} />}
         <h2 className={styles.title}>Welcome</h2>
         <p className={styles.subtitle}>
           {step === "credentials" ? "Please login to your account" : "Enter the OTP sent to your email"}
         </p>
+        {isLoginPaused && (
+          <div className={styles.lockoutBanner} role="status" aria-live="polite">
+            Login paused for invalid OTP attempts. Try again in {formatLockoutTime(lockoutRemainingSeconds)}.
+          </div>
+        )}
         <form onSubmit={handleSubmit} className={styles.form}>
           {step === "credentials" && (
             <>
@@ -104,13 +157,13 @@ const LoginPage = () => {
                 <label htmlFor="username" className={styles.label}>Username</label>
                 <input type="text" value={username} 
                 onChange={(e) => setUsername(e.target.value)} 
-                id="username" className={styles.input} placeholder="Enter your username" required />
+                id="username" className={styles.input} placeholder="Enter your username" required disabled={isLoginPaused} />
               </div>
               <div className={styles.inputGroup}>
                 <label htmlFor="password" className={styles.label}>Password</label>
                 <input type="password" value={password} 
                 onChange={(e) => setPassword(e.target.value)}
-                id="password" className={styles.input} placeholder="Enter your password" required />
+                id="password" className={styles.input} placeholder="Enter your password" required disabled={isLoginPaused} />
               </div>
             </>
           )}
@@ -128,16 +181,17 @@ const LoginPage = () => {
                   placeholder="Enter 6-digit OTP"
                   inputMode="numeric"
                   required
+                  disabled={isLoginPaused}
                 />
               </div>
             </>
           )}
 
-          <button type="submit" className={styles.button} disabled={loading}>
+          <button type="submit" className={styles.button} disabled={loading || isLoginPaused}>
             {loading ? "Please wait..." : step === "credentials" ? "Send OTP" : "Verify OTP"}
           </button>
           {step === "otp" && (
-            <button type="button" className={styles.secondaryButton} onClick={resetToCredentials} disabled={loading}>
+            <button type="button" className={styles.secondaryButton} onClick={resetToCredentials} disabled={loading || isLoginPaused}>
               Back
             </button>
           )}

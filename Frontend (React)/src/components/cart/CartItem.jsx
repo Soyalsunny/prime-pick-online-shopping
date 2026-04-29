@@ -13,7 +13,7 @@ const CartItem = ({
   const [loading, setLoading] = useState(false);
   const cartCode = localStorage.getItem("cart_code");
   const itemData = { quantity: quantity, item_id: item.id, cart_code: cartCode };
-  const itemId = { item_id: item.id };
+  const itemId = { item_id: item.id, cart_code: cartCode };
 
   function deleteCartItem() {
     const confirmDelete = window.confirm(
