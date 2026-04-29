@@ -147,7 +147,11 @@ const LoginPage = () => {
         </p>
         {isLoginPaused && (
           <div className={styles.lockoutBanner} role="status" aria-live="polite">
-            Login paused for invalid OTP attempts. Try again in {formatLockoutTime(lockoutRemainingSeconds)}.
+            {step === "credentials" ? (
+              <>Login paused for invalid username and password attempts. Try again in {formatLockoutTime(lockoutRemainingSeconds)}.</>
+            ) : (
+              <>Login paused for invalid OTP attempts. Try again in {formatLockoutTime(lockoutRemainingSeconds)}.</>
+            )}
           </div>
         )}
         <form onSubmit={handleSubmit} className={styles.form}>

@@ -1,8 +1,9 @@
 from django.db.models import Sum
 from django.db import transaction
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.throttling import ScopedRateThrottle
@@ -15,8 +16,19 @@ class AdminWriteThrottle(ScopedRateThrottle):
     scope = "admin_write"
 
 
+class HiddenAdminOnlyPermission(BasePermission):
+    """Return 404 for non-admin users so admin endpoints do not advertise themselves."""
+
+    message = "Not found."
+
+    def has_permission(self, request, view):
+        if request.user and request.user.is_staff:
+            return True
+        raise Http404()
+
+
 @api_view(["GET"])
-@permission_classes([IsAdminUser])
+@permission_classes([HiddenAdminOnlyPermission])
 @throttle_classes([AdminWriteThrottle])
 def admin_stats(request):
     total_products = Product.objects.count()
@@ -40,7 +52,7 @@ def admin_stats(request):
 
 
 @api_view(["GET", "POST"])
-@permission_classes([IsAdminUser])
+@permission_classes([HiddenAdminOnlyPermission])
 @throttle_classes([AdminWriteThrottle])
 def admin_products(request):
     if request.method == "GET":
@@ -57,7 +69,7 @@ def admin_products(request):
 
 
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
-@permission_classes([IsAdminUser])
+@permission_classes([HiddenAdminOnlyPermission])
 @throttle_classes([AdminWriteThrottle])
 def admin_product_detail(request, product_id):
     product = get_object_or_404(Product, id=product_id)
@@ -82,7 +94,7 @@ def admin_product_detail(request, product_id):
 
 
 @api_view(["GET"])
-@permission_classes([IsAdminUser])
+@permission_classes([HiddenAdminOnlyPermission])
 @throttle_classes([AdminWriteThrottle])
 def admin_orders(request):
     orders = (
@@ -95,7 +107,7 @@ def admin_orders(request):
 
 
 @api_view(["PATCH"])
-@permission_classes([IsAdminUser])
+@permission_classes([HiddenAdminOnlyPermission])
 @throttle_classes([AdminWriteThrottle])
 def admin_order_status(request, order_id):
     order = get_object_or_404(Order, id=order_id)

@@ -15,6 +15,7 @@ from django.http import FileResponse
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.core.cache import cache
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -52,11 +53,15 @@ from .serializers import (
     UserSerializer,
 )
 
+from .utils.cart_tokens import get_cart_code_from_request, make_cart_token
+
 User = get_user_model()
 security_logger = logging.getLogger("security_audit")
 
 MAX_OTP_ATTEMPTS = 5
 MAX_CART_ITEM_QTY = 20
+PASSWORD_FAIL_LIMIT = 3
+PASSWORD_LOCKOUT_SECONDS = 60
 
 
 class OTPRequestThrottle(ScopedRateThrottle):
@@ -426,8 +431,8 @@ def product_detail(request, slug):
 @throttle_classes([CartWriteThrottle])
 def add_item(request):
     try:
-        # Get data from the request
-        cart_code = request.data.get("cart_code")
+        # Get data from the request (supports cart_token via middleware/header)
+        cart_code = get_cart_code_from_request(request)
         product_id = request.data.get("product_id")
         quantity = request.data.get("quantity", 1)
 
@@ -440,7 +445,8 @@ def add_item(request):
 
         if request.user.is_authenticated:
             if cart.user and cart.user != request.user:
-                return Response({"error": "This cart does not belong to the current user."}, status=403)
+                # Do not reveal ownership information to callers; treat as not found
+                return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
             if cart.user is None:
                 cart.user = request.user
                 cart.save(update_fields=["user"])
@@ -495,7 +501,7 @@ def add_item(request):
 @api_view(['GET'])
 @throttle_classes([CartWriteThrottle])
 def product_in_cart(request):
-    cart_code = request.query_params.get("cart_code")
+    cart_code = get_cart_code_from_request(request)
     product_id = request.query_params.get("product_id")
 
     if not cart_code or not product_id:
@@ -512,7 +518,8 @@ def product_in_cart(request):
         return Response({'product_in_cart': False})
 
     if request.user.is_authenticated and cart.user and cart.user != request.user:
-        return Response({"error": "This cart does not belong to the current user."}, status=status.HTTP_403_FORBIDDEN)
+        # Do not reveal whether the cart exists or who owns it
+        return Response({"product_in_cart": False})
 
     product_exist_in_cart = CartItem.objects.filter(cart=cart, product=product).exists()
 
@@ -522,17 +529,17 @@ def product_in_cart(request):
 @api_view(['GET'])
 @throttle_classes([CartWriteThrottle])
 def get_cart_stat(request):
-    cart_code = request.query_params.get("cart_code")
+    cart_code = get_cart_code_from_request(request)
     if not cart_code:
         return Response({"error": "cart_code is required."}, status=status.HTTP_400_BAD_REQUEST)
 
     cart = Cart.objects.filter(cart_code=cart_code, paid=False).first()
 
     if not cart:
-        return Response({"id": None, "cart_code": cart_code, "num_of_items": 0})
+        return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
 
     if request.user.is_authenticated and cart.user and cart.user != request.user:
-        return Response({"error": "This cart does not belong to the current user."}, status=status.HTTP_403_FORBIDDEN)
+        return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
 
     serializer = SimpleCartSerializer(cart)
     return Response(serializer.data)
@@ -541,27 +548,17 @@ def get_cart_stat(request):
 @api_view(["GET"])
 @throttle_classes([CartWriteThrottle])
 def get_cart(request):
-    cart_code = request.query_params.get("cart_code")
+    cart_code = get_cart_code_from_request(request)
     if not cart_code:
         return Response({"error": "cart_code is required."}, status=status.HTTP_400_BAD_REQUEST)
 
     cart = Cart.objects.filter(cart_code=cart_code, paid=False).first()
 
     if not cart:
-        return Response(
-            {
-                "id": None,
-                "cart_code": cart_code,
-                "items": [],
-                "sum_total": 0,
-                "num_of_items": 0,
-                "created_at": None,
-                "modified_at": None,
-            }
-        )
+        return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
 
     if request.user.is_authenticated and cart.user and cart.user != request.user:
-        return Response({"error": "This cart does not belong to the current user."}, status=status.HTTP_403_FORBIDDEN)
+        return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
 
     serializer = CartSerializer(cart)
     return Response(serializer.data)
@@ -570,7 +567,7 @@ def get_cart(request):
 @api_view(["PATCH"])
 @throttle_classes([CartWriteThrottle])
 def update_quantity(request):
-    cart_code = request.data.get("cart_code")
+    cart_code = get_cart_code_from_request(request)
     cartitem_id = request.data.get("item_id")
     quantity = request.data.get("quantity")
 
@@ -599,7 +596,8 @@ def update_quantity(request):
         return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
 
     if request.user.is_authenticated and cart.user and cart.user != request.user:
-        return Response({"error": "This cart does not belong to the current user."}, status=status.HTTP_403_FORBIDDEN)
+        # Avoid revealing ownership; return generic not-found
+        return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
 
     cartitem = CartItem.objects.filter(id=cartitem_id, cart=cart).select_related("product").first()
     if not cartitem:
@@ -622,7 +620,7 @@ def update_quantity(request):
 def delete_cartitem(request):
     cartitem_id = request.data.get("item_id")
 
-    cart_code = request.data.get("cart_code")
+    cart_code = get_cart_code_from_request(request)
     if not cartitem_id or not cart_code:
         return Response(
             {"error": "item_id and cart_code are required."},
@@ -634,7 +632,8 @@ def delete_cartitem(request):
         return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
 
     if request.user.is_authenticated and cart.user and cart.user != request.user:
-        return Response({"error": "This cart does not belong to the current user."}, status=status.HTTP_403_FORBIDDEN)
+        # Avoid revealing ownership; return generic not-found
+        return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
 
     cartitem = CartItem.objects.filter(id=cartitem_id, cart=cart).first()
     if not cartitem:
@@ -642,6 +641,46 @@ def delete_cartitem(request):
 
     cartitem.delete()
     return Response({"message": "Item deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["POST"])
+@throttle_classes([CartWriteThrottle])
+def issue_cart_token(request):
+    """Create or lookup a cart and return an HMAC-signed cart token.
+
+    Request JSON (optional): {"cart_code": "...", "expires_in": seconds}
+    If `cart_code` is omitted a new guest cart_code is generated.
+    Returns: {"cart_code":"...","cart_token":"...","expires_in": seconds}
+    """
+    cart_code = request.data.get("cart_code") or request.query_params.get("cart_code")
+    try:
+        expires = int(request.data.get("expires_in") or request.query_params.get("expires_in") or 3600)
+    except (TypeError, ValueError):
+        expires = 3600
+
+    MAX_CART_CODE_LEN = 11
+    if cart_code:
+        if len(cart_code) > MAX_CART_CODE_LEN:
+            return Response({"error": f"cart_code cannot exceed {MAX_CART_CODE_LEN} characters."}, status=status.HTTP_400_BAD_REQUEST)
+        cart = Cart.objects.filter(cart_code=cart_code, paid=False).first()
+        if not cart:
+            default_user = request.user if request.user.is_authenticated else None
+            cart = Cart.objects.create(cart_code=cart_code, user=default_user)
+        else:
+            if request.user.is_authenticated and cart.user and cart.user != request.user:
+                return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
+            if request.user.is_authenticated and cart.user is None:
+                cart.user = request.user
+                cart.save(update_fields=["user"])
+    else:
+        import uuid
+
+        generated = uuid.uuid4().hex.upper()[:MAX_CART_CODE_LEN]
+        default_user = request.user if request.user.is_authenticated else None
+        cart = Cart.objects.create(cart_code=generated, user=default_user)
+
+    token = make_cart_token(cart.cart_code, expires_in=expires)
+    return Response({"cart_code": cart.cart_code, "cart_token": token, "expires_in": expires}, status=201)
 
 
 @api_view(["GET"])
@@ -760,7 +799,7 @@ def order_detail(request, order_id):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def create_order(request):
-    cart_code = request.data.get("cart_code")
+    cart_code = get_cart_code_from_request(request)
     address_id = request.data.get("address_id")
     shipping_address_payload = request.data.get("shipping_address")
     save_shipping_address = bool(request.data.get("save_shipping_address", False))
@@ -899,7 +938,7 @@ def create_stripe_checkout_session(request):
     if not django_settings.STRIPE_SECRET_KEY:
         return Response({"error": "Stripe secret key is not configured."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    cart_code = request.data.get("cart_code")
+    cart_code = get_cart_code_from_request(request)
     address_id = request.data.get("address_id")
     shipping_address_payload = request.data.get("shipping_address")
     save_shipping_address = bool(request.data.get("save_shipping_address", False))
@@ -1071,6 +1110,7 @@ def stripe_webhook(request):
         return Response({"error": "Invalid signature."}, status=status.HTTP_400_BAD_REQUEST)
 
     if PaymentWebhookEvent.objects.filter(event_id=event["id"]).exists():
+        _audit_event("stripe_webhook_duplicate", request, status_text="ignored", details=event["id"])
         return Response({"message": "Duplicate event ignored."}, status=status.HTTP_200_OK)
 
     PaymentWebhookEvent.objects.create(
@@ -1271,8 +1311,27 @@ def login_request_otp(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Account lockout: track failed attempts in cache and lock for PASSWORD_LOCKOUT_SECONDS after PASSWORD_FAIL_LIMIT failures
+    lock_key = f"pw_fail:{username.lower()}"
+    lock_entry = cache.get(lock_key) or {"count": 0, "locked_until": None}
+    now_ts = int(timezone.now().timestamp())
+    locked_until = lock_entry.get("locked_until")
+    if locked_until and locked_until > now_ts:
+        # Do not reveal lockout details to the client; return generic invalid-credentials message
+        return Response({"error": "Invalid username or password."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
     user = authenticate(request=request, username=username, password=password)
     if not user:
+        # increment failure count
+        failure_count = (lock_entry.get("count") or 0) + 1
+        if failure_count >= PASSWORD_FAIL_LIMIT:
+            # set lockout but return a generic error message (do not reveal lockout reason)
+            new_locked_until = now_ts + PASSWORD_LOCKOUT_SECONDS
+            cache.set(lock_key, {"count": 0, "locked_until": new_locked_until}, timeout=PASSWORD_LOCKOUT_SECONDS)
+            _audit_event("login_password", request, status_text="locked", details="too_many_failed_passwords")
+            return Response({"error": "Invalid username or password."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        else:
+            cache.set(lock_key, {"count": failure_count, "locked_until": None}, timeout=PASSWORD_LOCKOUT_SECONDS)
         _audit_event("login_password", request, status_text="failed", details="invalid_credentials")
         return Response({"error": "Invalid username or password."}, status=status.HTTP_400_BAD_REQUEST)
 

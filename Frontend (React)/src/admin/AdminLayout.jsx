@@ -2,7 +2,6 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useContext, useState } from "react";
 import { AuthContext } from "../context/AuthContext";
 import styles from "./AdminLayout.module.css";
-import { generateCartCode } from "../GenerateCartCode";
 import { toast } from "react-toastify";
 
 const AdminLayout = () => {
@@ -21,7 +20,8 @@ const AdminLayout = () => {
   const confirmLogout = () => {
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
-    localStorage.setItem("cart_code", generateCartCode());
+    localStorage.removeItem("cart_code");
+    localStorage.removeItem("cart_token");
     setIsAuthenticated(false);
     setShowLogoutConfirm(false);
     toast.success("Logged out successfully!");

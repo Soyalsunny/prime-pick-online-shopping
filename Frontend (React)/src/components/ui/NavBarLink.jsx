@@ -5,7 +5,6 @@ import { AuthContext } from "../../context/AuthContext";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSignOutAlt, faUser } from "@fortawesome/free-solid-svg-icons";
 import { toast } from "react-toastify";
-import { generateCartCode } from "../../GenerateCartCode";
 
 const NavBarLink = ({ setNumCartItems }) => {
   const { isAuthenticated, isStaff, setIsAuthenticated, username } =
@@ -24,7 +23,8 @@ const NavBarLink = ({ setNumCartItems }) => {
   const confirmLogout = () => {
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
-    localStorage.setItem("cart_code", generateCartCode());
+    localStorage.removeItem("cart_code");
+    localStorage.removeItem("cart_token");
     setIsAuthenticated(false);
     if (setNumCartItems) {
       setNumCartItems(0);

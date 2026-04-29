@@ -11,9 +11,8 @@ const CartItem = ({
 }) => {
   const [quantity, setQuantity] = useState(item.quantity);
   const [loading, setLoading] = useState(false);
-  const cartCode = localStorage.getItem("cart_code");
-  const itemData = { quantity: quantity, item_id: item.id, cart_code: cartCode };
-  const itemId = { item_id: item.id, cart_code: cartCode };
+  const itemData = { quantity: quantity, item_id: item.id };
+  const itemId = { item_id: item.id };
 
   function deleteCartItem() {
     const confirmDelete = window.confirm(
@@ -52,10 +51,7 @@ const CartItem = ({
   function updateCartitem() {
     const parsedQuantity = Number.parseInt(quantity, 10);
 
-    if (!cartCode) {
-      toast.error("Cart not found. Please refresh and try again.");
-      return;
-    }
+    // cart token is attached via api interceptor; rely on middleware
 
     if (Number.isNaN(parsedQuantity) || parsedQuantity < 1) {
       toast.error("Quantity must be at least 1.");

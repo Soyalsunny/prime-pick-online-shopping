@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import api from "../api";
 
 function useCartData() {
-  const cart_code = localStorage.getItem("cart_code");
+  const cart_token = localStorage.getItem("cart_token");
   const [cartItems, setCartItems] = useState([]);
   const [cartTotal, setCartTotal] = useState(0.0);
   const tax = 4.0;
@@ -11,7 +11,7 @@ function useCartData() {
   useEffect(function () {
     setLoading(true);
     api
-      .get(`get_cart?cart_code=${cart_code}`)
+      .get(`get_cart`)
       .then((res) => {
         console.log(res.data);
         setLoading(false);
@@ -23,7 +23,7 @@ function useCartData() {
         console.log(err.message);
         setLoading(false);
       });
-  }, [cart_code]);
+  }, [cart_token]);
 
   return {cartItems, setCartItems, cartTotal, setCartTotal, tax, loading}
 }

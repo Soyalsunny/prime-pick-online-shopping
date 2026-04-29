@@ -42,3 +42,23 @@ class VEMTests(TestCase):
         payload = {"cart_code": "test-123", "product_id": 1, "quantity": -1}
         resp = self.client.post("/add_item/", data=payload, format="json")
         self.assertEqual(resp.status_code, 400)
+
+    def test_password_lockout_generic_message(self):
+        """After 3 failed password attempts the response should be a generic invalid-credentials message and a 429 status."""
+        payload = {"username": "usera", "password": "wrongpass"}
+
+        # First failed attempt -> 400 with generic message
+        resp1 = self.client.post("/auth/login/request-otp/", data=payload, format="json")
+        self.assertEqual(resp1.status_code, 400)
+        self.assertIn("error", resp1.data)
+        self.assertEqual(str(resp1.data.get("error")), "Invalid username or password.")
+
+        # Second failed attempt -> still 400
+        resp2 = self.client.post("/auth/login/request-otp/", data=payload, format="json")
+        self.assertEqual(resp2.status_code, 400)
+
+        # Third failed attempt -> 429 lockout but generic message
+        resp3 = self.client.post("/auth/login/request-otp/", data=payload, format="json")
+        self.assertEqual(resp3.status_code, 429)
+        self.assertIn("error", resp3.data)
+        self.assertEqual(str(resp3.data.get("error")), "Invalid username or password.")

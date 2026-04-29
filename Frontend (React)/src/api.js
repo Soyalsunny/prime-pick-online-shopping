@@ -35,6 +35,11 @@ api.interceptors.request.use(
         localStorage.removeItem("refresh");
       }
     }
+    // Attach cart token header if available so backend middleware can resolve cart_code
+    const cartToken = localStorage.getItem("cart_token");
+    if (cartToken) {
+      config.headers["X-Cart-Token"] = cartToken;
+    }
     return config;
   },
   (error) => {

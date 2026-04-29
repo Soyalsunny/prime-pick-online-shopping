@@ -27,11 +27,11 @@ import "./layout/ToastTheme.css"
 const App = () => {
 
   const [numCartItems, setNumCartItems] = useState(0);
-  const cart_code = localStorage.getItem("cart_code")
+  const cartToken = localStorage.getItem("cart_token")
 
   useEffect(function(){
-    if(cart_code){
-      api.get(`get_cart_stat?cart_code=${cart_code}`)
+    if(cartToken){
+      api.get(`get_cart_stat`)
       .then(res => {
         setNumCartItems(res.data.num_of_items)
       })
@@ -44,7 +44,7 @@ const App = () => {
       setNumCartItems(0)
     }
     
-  }, [cart_code])
+  }, [cartToken])
 
   return (
     <AuthProvider>

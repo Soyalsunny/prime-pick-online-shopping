@@ -31,8 +31,8 @@ const PaymentSection = ({ cartItems, setCartItems, setCartTotal, tax, setNumCart
     const [addressErrors, setAddressErrors] = useState({})
 
     const navigate = useNavigate()
-    const cartCode = localStorage.getItem('cart_code')
-    const retryStorageKey = cartCode ? `stripe_retry_${cartCode}` : null
+    const cartToken = localStorage.getItem('cart_token')
+    const retryStorageKey = cartToken ? `stripe_retry_${cartToken}` : null
 
     const getStoredRetryCount = () => {
         if (!retryStorageKey) return 0
@@ -192,15 +192,14 @@ const PaymentSection = ({ cartItems, setCartItems, setCartTotal, tax, setNumCart
     }
 
     const handlePlaceOrder = async (paymentMethod) => {
-        if (!cartItems.length || !cartCode) {
-            toast.error('Your cart is empty.')
-            return
-        }
+        if (!cartItems.length) {
+                toast.error('Your cart is empty.')
+                return
+            }
 
-        const payload = {
-            cart_code: cartCode,
-            payment_method: paymentMethod,
-        }
+            const payload = {
+                payment_method: paymentMethod,
+            }
 
         if (addressMode === 'saved') {
             if (!selectedAddressId) {

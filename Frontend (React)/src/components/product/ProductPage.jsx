@@ -15,12 +15,10 @@ const ProductPage = ({ setNumCartItems }) => {
   const [loading, setLoading] = useState(false);
   const [inCart, setInCart] = useState(false);
   const [error, setError] = useState("");
-  const cart_code = localStorage.getItem("cart_code");
-
   useEffect(() => {
     if (product.id) {
       api
-        .get(`product_in_cart?cart_code=${cart_code}&product_id=${product.id}`)
+        .get(`product_in_cart?product_id=${product.id}`)
         .then((res) => {
           console.log(res.data);
           setInCart(res.data.product_in_cart);
@@ -29,9 +27,9 @@ const ProductPage = ({ setNumCartItems }) => {
           console.log(err.message);
         });
     }
-  }, [cart_code, product.id]);
+  }, [product.id]);
 
-  const newItem = { cart_code: cart_code, product_id: product.id };
+  const newItem = { product_id: product.id };
   const isOutOfStock = !product.is_in_stock || Number(product.stock) <= 0;
 
   function add_item() {

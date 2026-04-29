@@ -36,18 +36,21 @@ export function AuthProvider({children}){
             return null
         }
 
-        const guestCartCode = localStorage.getItem("cart_code")
-
         try {
-            const query = guestCartCode
-                ? `get_username?guest_cart_code=${encodeURIComponent(guestCartCode)}`
-                : "get_username"
-            const res = await api.get(query)
+            // Ensure we have a cart token; request one if missing
+            let cartToken = localStorage.getItem("cart_token")
+            if (!cartToken) {
+                const tokenRes = await api.post("cart/token/", {})
+                if (tokenRes?.data?.cart_token) {
+                    cartToken = tokenRes.data.cart_token
+                    localStorage.setItem("cart_token", cartToken)
+                    localStorage.removeItem("cart_code")
+                }
+            }
+
+            const res = await api.get("get_username")
             setUsername(res.data.username)
             setIsStaff(res.data.is_staff || false)
-            if (res.data.cart_code) {
-                localStorage.setItem("cart_code", res.data.cart_code)
-            }
             return res.data
         } catch (err) {
             console.log(err.message)

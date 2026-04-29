@@ -54,6 +54,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'shop_app.middleware.cart_token_middleware.CartTokenMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -66,6 +67,7 @@ CORS_ALLOWED_ORIGINS = config(
 
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'idempotency-key',
+    'x-cart-token',
 ]
 
 ROOT_URLCONF = 'primepick.urls'

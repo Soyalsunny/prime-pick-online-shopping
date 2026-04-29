@@ -18,9 +18,7 @@ const ShopCard = ({ product, setNumCartItems }) => {
     }
     setLoading(true);
 
-    const cart_code = localStorage.getItem('cart_code');
     const itemData = {
-      cart_code: cart_code,
       product_id: product.id,
       quantity: parseInt(quantity),
     };
@@ -33,8 +31,8 @@ const ShopCard = ({ product, setNumCartItems }) => {
         setQuantity(1);
         setLoading(false);
 
-        // Update cart count
-        api.get(`get_cart_stat?cart_code=${cart_code}`).then((res) => {
+        // Update cart count (uses X-Cart-Token header)
+        api.get(`get_cart_stat`).then((res) => {
           setNumCartItems(res.data.num_of_items);
         });
       })
