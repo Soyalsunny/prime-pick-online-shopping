@@ -65,6 +65,12 @@ PASSWORD_FAIL_LIMIT = 3
 PASSWORD_LOCKOUT_SECONDS = 60
 
 
+def _empty_cart_payload(cart_code=None):
+    return {
+        "message": "no cart items found"
+    }
+
+
 class OTPRequestThrottle(ScopedRateThrottle):
     scope = "otp_request"
 
@@ -536,8 +542,15 @@ def product_in_cart(request):
 @throttle_classes([CartWriteThrottle])
 def get_cart_stat(request):
     cart_code = get_cart_code_from_request(request)
+    requested_cart_code = request.query_params.get("cart_code")
+    has_cart_token = bool(request.META.get("HTTP_X_CART_TOKEN") or request.query_params.get("cart_token"))
     if not cart_code:
+        if has_cart_token:
+            return Response(_empty_cart_payload(requested_cart_code))
         return Response({"error": "cart_code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if requested_cart_code and requested_cart_code != cart_code:
+        return Response(_empty_cart_payload(requested_cart_code))
 
     cart = Cart.objects.filter(cart_code=cart_code, paid=False).first()
 
@@ -545,7 +558,7 @@ def get_cart_stat(request):
         return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
 
     if request.user.is_authenticated and cart.user and cart.user != request.user:
-        return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(_empty_cart_payload(cart_code))
 
     serializer = SimpleCartSerializer(cart)
     return Response(serializer.data)
@@ -555,8 +568,15 @@ def get_cart_stat(request):
 @throttle_classes([CartWriteThrottle])
 def get_cart(request):
     cart_code = get_cart_code_from_request(request)
+    requested_cart_code = request.query_params.get("cart_code")
+    has_cart_token = bool(request.META.get("HTTP_X_CART_TOKEN") or request.query_params.get("cart_token"))
     if not cart_code:
+        if has_cart_token:
+            return Response(_empty_cart_payload(requested_cart_code))
         return Response({"error": "cart_code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if requested_cart_code and requested_cart_code != cart_code:
+        return Response(_empty_cart_payload(requested_cart_code))
 
     cart = Cart.objects.filter(cart_code=cart_code, paid=False).first()
 
@@ -564,7 +584,7 @@ def get_cart(request):
         return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
 
     if request.user.is_authenticated and cart.user and cart.user != request.user:
-        return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(_empty_cart_payload(cart_code))
 
     serializer = CartSerializer(cart)
     return Response(serializer.data)
@@ -675,6 +695,8 @@ def issue_cart_token(request):
         else:
             if request.user.is_authenticated and cart.user and cart.user != request.user:
                 return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
+            if not request.user.is_authenticated and cart.user is not None:
+                return Response({"error": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
             if request.user.is_authenticated and cart.user is None:
                 cart.user = request.user
                 cart.save(update_fields=["user"])
@@ -685,7 +707,11 @@ def issue_cart_token(request):
         default_user = request.user if request.user.is_authenticated else None
         cart = Cart.objects.create(cart_code=generated, user=default_user)
 
-    token = make_cart_token(cart.cart_code, expires_in=expires)
+    token = make_cart_token(
+        cart.cart_code,
+        expires_in=expires,
+        user_id=cart.user_id if cart.user_id else None,
+    )
     return Response({"cart_code": cart.cart_code, "cart_token": token, "expires_in": expires}, status=201)
 
 

@@ -16,7 +16,7 @@ def _b64u_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + padding)
 
 
-def make_cart_token(cart_code: str, expires_in: int = 3600) -> str:
+def make_cart_token(cart_code: str, expires_in: int = 3600, user_id: int | None = None) -> str:
     """Create an HMAC-signed cart token containing cart_code and expiry (unix ts).
 
     Token format: base64url(payload).hex_signature
@@ -25,13 +25,14 @@ def make_cart_token(cart_code: str, expires_in: int = 3600) -> str:
     returns: <b64u(payload)>.<hexsig>
     """
     exp = int(time.time()) + int(expires_in)
-    payload = json.dumps({"c": cart_code, "e": exp}, separators=(",", ":")).encode("utf-8")
+    payload_data = {"c": cart_code, "e": exp, "u": user_id}
+    payload = json.dumps(payload_data, separators=(",", ":")).encode("utf-8")
     sig = hmac.new(settings.SECRET_KEY.encode("utf-8"), payload, hashlib.sha256).hexdigest()
     return f"{_b64u_encode(payload)}.{sig}"
 
 
-def verify_cart_token(token: str) -> str | None:
-    """Verify token and return cart_code if valid and not expired, else None."""
+def verify_cart_token(token: str) -> dict | None:
+    """Verify token and return the decoded payload if valid and not expired, else None."""
     try:
         parts = token.split(".")
         if len(parts) != 2:
@@ -45,7 +46,7 @@ def verify_cart_token(token: str) -> str | None:
         data = json.loads(payload.decode("utf-8"))
         if int(time.time()) > int(data.get("e", 0)):
             return None
-        return data.get("c")
+        return data
     except Exception:
         return None
 
@@ -56,15 +57,28 @@ def get_cart_code_from_request(request):
     Accepts `X-Cart-Token` or the `cart_token` query parameter. If the token is valid,
     returns the embedded cart_code; otherwise returns None.
     """
-    # prefer attribute set by middleware
-    if hasattr(request, "cart_code") and request.cart_code:
-        return request.cart_code
+    query_params = getattr(request, "query_params", None) or getattr(request, "GET", None) or {}
+    token = request.META.get("HTTP_X_CART_TOKEN") or query_params.get("cart_token")
+    if not token:
+        return None
 
-    # header
-    token = request.META.get("HTTP_X_CART_TOKEN") or request.query_params.get("cart_token")
-    if token:
-        cart_code = verify_cart_token(token)
-        if cart_code:
-            return cart_code
+    payload = getattr(request, "cart_token_payload", None)
+    if not payload:
+        payload = verify_cart_token(token)
+        if payload:
+            request.cart_token_payload = payload
 
-    return None
+    if not payload:
+        return None
+
+    token_cart_code = payload.get("c")
+    token_user_id = payload.get("u")
+    current_user = getattr(request, "user", None)
+    current_user_id = current_user.id if getattr(current_user, "is_authenticated", False) else None
+    if current_user_id is None:
+        if token_user_id is not None:
+            return None
+    elif token_user_id != current_user_id:
+        return None
+
+    return token_cart_code

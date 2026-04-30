@@ -15,8 +15,8 @@ class CartTokenMiddleware(MiddlewareMixin):
     - `X-Cart-Token` header
     - `cart_token` query parameter
 
-    If a valid token is found, the middleware sets `request.cart_code` and, for GET
-    requests, injects `cart_code` into `request.GET` so existing views continue to work.
+    If a valid token is found, the middleware stores the decoded payload on the request
+    so downstream helpers can validate ownership against the authenticated user.
     """
 
     def process_request(self, request):
@@ -34,18 +34,7 @@ class CartTokenMiddleware(MiddlewareMixin):
             )
             return None
 
-        # attach to request for downstream code to use
-        request.cart_code = cart_code
-
-        # for GET requests, inject into QueryDict so views using request.query_params pick it up
-        if request.method == "GET":
-            try:
-                mutable_qs = request.GET.copy()
-                if "cart_code" not in mutable_qs:
-                    mutable_qs["cart_code"] = cart_code
-                    request.GET = mutable_qs
-            except Exception:
-                # non-fatal; continue
-                pass
+        # attach decoded payload for downstream code to use
+        request.cart_token_payload = cart_code
 
         return None
